@@ -1,5 +1,4 @@
-# pylint : skip-file
-
+from .example_module import greetings, meaning
 from .calibration import *
 from .example_module import greetings, meaning
 from .photometry import *
