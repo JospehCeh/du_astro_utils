@@ -1,11 +1,13 @@
 # pylint : skip-file
 
-# from .example_module import greetings, meaning
 from .calibration import *
+from .example_module import greetings, meaning
 from .photometry import *
 from .utils import *
 
 __all__ = [
+    "greetings",
+    "meaning",
     "get_calib_dirs_photometry",
     "get_infos_from_image",
     "check_obs_night",
