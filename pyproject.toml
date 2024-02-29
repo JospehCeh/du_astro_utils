@@ -17,6 +17,13 @@ dynamic = ["version"]
 requires-python = ">=3.9"
 dependencies = [
     "ipykernel", # Support for Jupyter notebooks
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    "astropy",
+    "astroquery",
+    "photutils",
+    "matplotlib"
 ]
 
 [project.urls]
@@ -57,15 +64,15 @@ testpaths = [
 ]
 
 [tool.black]
-line-length = 110
+line-length = 300
 target-version = ["py39"]
 
 [tool.isort]
 profile = "black"
-line_length = 110
+line_length = 300
 
 [tool.ruff]
-line-length = 110
+line-length = 300
 target-version = "py39"
 
 [tool.ruff.lint]
@@ -107,6 +114,9 @@ ignore = [
     "SIM117", # Allow nested with
     "UP015", # Allow redundant open parameters
     "UP028", # Allow yield in for loop
+    "N803",
+    "N806",
+    "E722"
 ]
 
 [tool.coverage.run]
