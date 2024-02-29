@@ -18,7 +18,10 @@ DIR_PHOTOM = "Photometry"
 DIR_SPECTRO = "Spectroscopy"
 DIR_ASTER = "Asteroids"
 DIR_CALIB = "CCD__BIAS_DARKS_FLATS"
-C2PU_DATA_DIR = os.environ["ARCHIVESC2PU"]
+try:
+    C2PU_DATA_DIR = os.environ["ARCHIVESC2PU"]
+except KeyError:
+    C2PU_DATA_DIR = input("Please type in the location of the root archives directory, e.g. /home/user/Archives_C2PU")
 
 
 def get_calib_dirs_photometry(fits_image_path):
