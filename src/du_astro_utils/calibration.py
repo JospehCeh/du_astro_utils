@@ -431,7 +431,7 @@ def master_flat(flat_frames_list, master_dark_path):
     }
 
 
-def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_bias_dir="", use_bias=False):
+def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_bias_dir="", use_bias=False, override_date_check=False, max_days=7, speedup=False):
     """
     Apply calibration frames to a science image to obtain a reduced science image to be used for analysis.
     If the master bias is used : $REDUCED = \frac{SCIENCE-mDARK-mBIAS}{mFLAT}$
@@ -449,6 +449,18 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
         if `use_bias` : path to the directory containing BIAS frames. The default is "".
     use_bias : bool, optional
         Whether to use the master bias in calibration. The default is False.
+    override_date_check : bool, optional
+        Whether to allow calibration frames that are not date-wise compatible with the science frame.\
+            The default is False.
+    max_days : int, optional
+        If `override_date_check` is `False`, the maximum number of days allowed between science image and calibration frame.\
+            The default is 7.
+    speedup : bool, optional
+        Whether to restrict some ressource-consuming functions so that the code executes faster or doesn't crash on smaller machines.
+        *E.g.* can be used in Jupyter notebooks to avoid kernel dying.
+        Effects include : limiting the number of calibration frames to create MASTER frames ;\
+            limiting the number of sources to estimate the FWHM of the image.
+        The dufault is False.
 
     Returns
     -------
@@ -469,32 +481,43 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
     # - D+1 and 00:00:00 <= HH:MM:SS <= 11:59:59
     # TBD
 
+    if speedup:
+        max_cal_frames = 10
+
     # BIAS is included in DARK unless exposure time of DARK is not significant
     if use_bias:
         # Master bias
         # TBD: check if there is already one that works
         # path_to_bias_dir = os.path.join(sc_im_dir, '..', 'bias')
-        bias_list = load_bias_frames(path_to_bias_dir, sc_date, sc_cam, sc_x, sc_y)
+        bias_list = load_bias_frames(path_to_bias_dir, sc_date, sc_cam, sc_x, sc_y, override_date_check=override_date_check, max_days=max_days)
+        if speedup:
+            bias_list = np.random.choice(bias_list, max_cal_frames)
         MASTER_BIAS = master_bias(bias_list)
 
         # Master dark
         # TBD: check if there is already one that works
         # path_to_darks_dir = os.path.join(sc_im_dir, '..', 'darks')
-        darks_list = load_dark_frames(path_to_darks_dir, sc_date, sc_cam, sc_expos, sc_x, sc_y)
+        darks_list = load_dark_frames(path_to_darks_dir, sc_date, sc_cam, sc_expos, sc_x, sc_y, override_date_check=override_date_check, max_days=max_days)
+        if speedup:
+            darks_list = np.random.choice(darks_list, max_cal_frames)
         MASTER_DARK, HOT_PIXELS = master_dark(darks_list, use_bias=True, master_bias=MASTER_BIAS["path"])
         additive_corr = MASTER_DARK["data"] - MASTER_BIAS["data"]
     else:
         # Master dark
         # TBD: check if there is already one that works
         # path_to_darks_dir = os.path.join(sc_im_dir, '..', 'darks')
-        darks_list = load_dark_frames(path_to_darks_dir, sc_date, sc_cam, sc_expos, sc_x, sc_y)
+        darks_list = load_dark_frames(path_to_darks_dir, sc_date, sc_cam, sc_expos, sc_x, sc_y, override_date_check=override_date_check, max_days=max_days)
+        if speedup:
+            darks_list = np.random.choice(darks_list, max_cal_frames)
         MASTER_DARK, HOT_PIXELS = master_dark(darks_list)
         additive_corr = MASTER_DARK["data"]
 
     # Master flat
     # TBD: check if there is already one that works
     # path_to_flats_dir = os.path.join(sc_im_dir, '..', 'flats')
-    flats_list = load_flat_frames(path_to_flats_dir, sc_date, sc_cam, sc_filter, sc_x, sc_y)
+    flats_list = load_flat_frames(path_to_flats_dir, sc_date, sc_cam, sc_filter, sc_x, sc_y, override_date_check=override_date_check, max_days=max_days)
+    if speedup:
+        flats_list = np.random.choice(flats_list, max_cal_frames)
     MASTER_FLAT, DEAD_PIXELS = master_flat(flats_list, MASTER_DARK["path"])
 
     sc_hdu = fits.open(fits_image)[0]
