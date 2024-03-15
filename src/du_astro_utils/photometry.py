@@ -113,7 +113,7 @@ def detect_sources(reduced_fits_image, detection_fwhm=4.0, detection_threshold_n
     return sources
 
 
-def get_fwhm(reduced_fits_image, sources, src_siz=51):
+def get_fwhm(reduced_fits_image, sources, src_siz=51, max_sources=np.inf):
     """
     Computes the Full-width at half-maximum property of an image.
 
@@ -125,10 +125,13 @@ def get_fwhm(reduced_fits_image, sources, src_siz=51):
         Table of sources in the image.
     src_siz : float, optional
         Sources diameter in pixels. The default is 51.
+    max_sources : int, optional
+        The maximum number of sources to use for FWHM estimation. Using fewer sources can speed-up the code.\
+            The default is `numpy.inf` (use all detected sources).
 
     Returns
     -------
-    fwhm : float
+    float
         Full-width at half-maximum of sources described by a gaussian curve.
 
     """
@@ -156,9 +159,11 @@ def get_fwhm(reduced_fits_image, sources, src_siz=51):
     # Randomly choose a source far enough from edges
     src_sel = np.random.randint(0, len(zoom_sources))
     src_pos = (zoom_sources[src_sel]["xcentroid"], zoom_sources[src_sel]["ycentroid"])
-    while (src_pos[0] < src_siz) or (src_pos[1] < src_siz) or ((zoom_hdu.data.shape[0] - src_pos[0]) < src_siz) or ((zoom_hdu.data.shape[1] - src_pos[1]) < src_siz):
+    count = 0
+    while ((src_pos[0] < src_siz) or (src_pos[1] < src_siz) or ((zoom_hdu.data.shape[0] - src_pos[0]) < src_siz) or ((zoom_hdu.data.shape[1] - src_pos[1]) < src_siz)) and count < max_sources:
         src_sel = np.random.randint(0, len(zoom_sources))
         src_pos = (zoom_sources[src_sel]["xcentroid"], zoom_sources[src_sel]["ycentroid"])
+        count += 1
 
     # Cutout
     src_cut = Cutout2D(zoom_hdu.data, position=src_pos, size=src_siz)
@@ -259,9 +264,10 @@ def query_sso_photometry(reduced_fits_image, fwhm, cone_angle_deg=0.25):
     try:
         field = SkyCoord(wcs.wcs.crval[0], wcs.wcs.crval[1], unit=u.deg)
         ssos = Skybot.cone_search(field, cone_angle_deg * u.deg, epoch)
+        ssos.pprint()
         print(f"Number of SSOs predicted: {len(ssos):d}")
     # And tell us if no SSO are present in the field of view
-    except:
+    except TypeError:
         print("No SSO in the current Field of View")
         return None
 
@@ -308,6 +314,10 @@ def query_sso_photometry(reduced_fits_image, fwhm, cone_angle_deg=0.25):
 
     phot_ssos["noise"] = np.sqrt(phot_ssos["aper_sum_bkgsub"] + phot_ssos["aper_bkg"])  # photon noise: source + sky
     phot_ssos["SNR"] = phot_ssos["aper_sum_bkgsub"] / phot_ssos["noise"]
+
+    phot_ssos["Name"] = ssos["Name"]
+    phot_ssos["Number"] = ssos["Number"]
+    phot_ssos["xyPosition"] = ssos_positions
 
     name_csv = reduced_fits_image[:-8] + "-forced_phot.csv"
     ascii.write(phot_ssos, name_csv, format="csv", overwrite=True)

@@ -89,7 +89,7 @@ def check_obs_night(date, date_ref, max_days=7):
     return abs(time_delta.days) <= max_days
 
 
-def load_bias_frames(path_to_bias_dir, aq_date, aq_cam, size_x, size_y, override_date_check=False):
+def load_bias_frames(path_to_bias_dir, aq_date, aq_cam, size_x, size_y, override_date_check=False, max_days=7):
     """
     Find and load BIAS frames compatible with a science image.
 
@@ -108,6 +108,9 @@ def load_bias_frames(path_to_bias_dir, aq_date, aq_cam, size_x, size_y, override
     override_date_check : bool, optional
         Whether to allow calibration frames that are not date-wise compatible with the science frame.\
             The default is False.
+    max_days : int, optional
+        If `override_date_check` is `False`, the maximum number of days allowed between science image and calibration frame.\
+            The default is 7.
 
     Returns
     -------
@@ -118,14 +121,16 @@ def load_bias_frames(path_to_bias_dir, aq_date, aq_cam, size_x, size_y, override
     _path = os.path.abspath(path_to_bias_dir)
     bias_frames_list = []
     for _file in os.listdir(_path):
+        bn, ext = os.path.splitext(os.path.basename(_file))
         _fpath = os.path.join(_path, _file)
-        _dat, _scope, _cam, _filt, _dur, _x, _y = get_infos_from_image(_fpath)
-        if (check_obs_night(_dat, aq_date) or override_date_check) and _x == size_x and _y == size_y:
-            bias_frames_list.append(_fpath)
+        if os.path.isfile(_fpath) and "fits" in ext.lower():
+            _dat, _scope, _cam, _filt, _dur, _x, _y = get_infos_from_image(_fpath)
+            if (check_obs_night(_dat, aq_date, max_days) or override_date_check) and _x == size_x and _y == size_y:
+                bias_frames_list.append(_fpath)
     return bias_frames_list
 
 
-def load_dark_frames(path_to_darks_dir, aq_date, aq_cam, expos_time, size_x, size_y, override_date_check=False):
+def load_dark_frames(path_to_darks_dir, aq_date, aq_cam, expos_time, size_x, size_y, override_date_check=False, max_days=7):
     """
     Find and load DARK frames compatible with a science image.
 
@@ -146,6 +151,9 @@ def load_dark_frames(path_to_darks_dir, aq_date, aq_cam, expos_time, size_x, siz
     override_date_check : bool, optional
         Whether to allow calibration frames that are not date-wise compatible with the science frame.\
             The default is False.
+    max_days : int, optional
+        If `override_date_check` is `False`, the maximum number of days allowed between science image and calibration frame.\
+            The default is 7.
 
     Returns
     -------
@@ -156,14 +164,16 @@ def load_dark_frames(path_to_darks_dir, aq_date, aq_cam, expos_time, size_x, siz
     _path = os.path.abspath(path_to_darks_dir)
     dark_frames_list = []
     for _file in os.listdir(_path):
+        bn, ext = os.path.splitext(os.path.basename(_file))
         _fpath = os.path.join(_path, _file)
-        _dat, _scope, _cam, _filt, _dur, _x, _y = get_infos_from_image(_fpath)
-        if (check_obs_night(_dat, aq_date) or override_date_check) and _x == size_x and _y == size_y and _dur == expos_time:
-            dark_frames_list.append(_fpath)
+        if os.path.isfile(_fpath) and "fits" in ext.lower():
+            _dat, _scope, _cam, _filt, _dur, _x, _y = get_infos_from_image(_fpath)
+            if (check_obs_night(_dat, aq_date, max_days) or override_date_check) and _x == size_x and _y == size_y and _dur == expos_time:
+                dark_frames_list.append(_fpath)
     return dark_frames_list
 
 
-def load_flat_frames(path_to_flats_dir, aq_date, aq_cam, aq_filter, size_x, size_y, override_date_check=False):
+def load_flat_frames(path_to_flats_dir, aq_date, aq_cam, aq_filter, size_x, size_y, override_date_check=False, max_days=7):
     """
     Find and load FLAT frames compatible with a science image.
 
@@ -184,6 +194,9 @@ def load_flat_frames(path_to_flats_dir, aq_date, aq_cam, aq_filter, size_x, size
     override_date_check : bool, optional
         Whether to allow calibration frames that are not date-wise compatible with the science frame.\
             The default is False.
+    max_days : int, optional
+        If `override_date_check` is `False`, the maximum number of days allowed between science image and calibration frame.\
+            The default is 7.
 
     Returns
     -------
@@ -194,10 +207,12 @@ def load_flat_frames(path_to_flats_dir, aq_date, aq_cam, aq_filter, size_x, size
     _path = os.path.abspath(path_to_flats_dir)
     flat_frames_list = []
     for _file in os.listdir(_path):
+        bn, ext = os.path.splitext(os.path.basename(_file))
         _fpath = os.path.join(_path, _file)
-        _dat, _scope, _cam, _filt, _dur, _x, _y = get_infos_from_image(_fpath)
-        if (check_obs_night(_dat, aq_date) or override_date_check) and _x == size_x and _y == size_y and _filt == aq_filter:
-            flat_frames_list.append(_fpath)
+        if os.path.isfile(_fpath) and "fits" in ext.lower():
+            _dat, _scope, _cam, _filt, _dur, _x, _y = get_infos_from_image(_fpath)
+            if (check_obs_night(_dat, aq_date, max_days) or override_date_check) and _x == size_x and _y == size_y and _filt == aq_filter:
+                flat_frames_list.append(_fpath)
     return flat_frames_list
 
 

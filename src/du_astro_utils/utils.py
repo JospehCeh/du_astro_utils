@@ -75,9 +75,10 @@ def get_calib_dirs_photometry(fits_image_path):
 
     all_flats_filts = os.listdir(flats_dir)
     for _filt in all_flats_filts:
-        if (acq_filter.lower() == "") and ("none" in _filt.lower()):
-            flats_dir = os.path.join(flats_dir, _filt)
-        elif acq_filter.lower() in _filt.lower():
+        if "none" in _filt.lower():
+            if acq_filter.lower() == "":
+                flats_dir = os.path.join(flats_dir, _filt)
+        elif (acq_filter.lower() in _filt.lower()) and acq_filter.lower() != "":
             flats_dir = os.path.join(flats_dir, _filt)
 
     return bias_dir, darks_dir, flats_dir
