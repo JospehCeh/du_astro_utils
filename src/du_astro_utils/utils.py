@@ -46,39 +46,40 @@ def get_calib_dirs_photometry(fits_image_path):
         Path to FLAT images.
 
     """
-    hdu = fits.open(fits_image_path)[0]
-    expos_time = hdu.header.get("EXPTIME")
-    acq_cam = hdu.header.get("CAMMODEL").strip()
-    acq_filter = hdu.header.get("INSTFILT").strip()
+    with fits.open(fits_image_path) as hdul:
+        hdu = hdul[0]
+        expos_time = hdu.header.get("EXPTIME")
+        acq_cam = hdu.header.get("CAMMODEL").strip()
+        acq_filter = hdu.header.get("INSTFILT").strip()
 
-    root_dir = os.path.join(C2PU_DATA_DIR, DIR_PHOTOM, DIR_CALIB)
-    bias_dir = os.path.join(root_dir, "BIAS")
-    darks_dir = os.path.join(root_dir, "DARKS")
-    flats_dir = os.path.join(root_dir, "FLATS")
+        root_dir = os.path.join(C2PU_DATA_DIR, DIR_PHOTOM, DIR_CALIB)
+        bias_dir = os.path.join(root_dir, "BIAS")
+        darks_dir = os.path.join(root_dir, "DARKS")
+        flats_dir = os.path.join(root_dir, "FLATS")
 
-    for cam in os.listdir(bias_dir):
-        if cam in acq_cam:
-            bias_dir = os.path.join(bias_dir, cam)
+        for cam in os.listdir(bias_dir):
+            if cam in acq_cam:
+                bias_dir = os.path.join(bias_dir, cam)
 
-    for cam in os.listdir(darks_dir):
-        if cam in acq_cam:
-            darks_dir = os.path.join(darks_dir, cam)
+        for cam in os.listdir(darks_dir):
+            if cam in acq_cam:
+                darks_dir = os.path.join(darks_dir, cam)
 
-    for cam in os.listdir(flats_dir):
-        if cam in acq_cam:
-            flats_dir = os.path.join(flats_dir, cam)
+        for cam in os.listdir(flats_dir):
+            if cam in acq_cam:
+                flats_dir = os.path.join(flats_dir, cam)
 
-    all_darks_durs = os.listdir(darks_dir)
-    exp_in_s = np.array([float(dur[:-1]) for dur in all_darks_durs])
-    best_dur_loc = np.argmin(np.abs(exp_in_s - expos_time))
-    darks_dir = os.path.join(darks_dir, all_darks_durs[best_dur_loc])
+        all_darks_durs = os.listdir(darks_dir)
+        exp_in_s = np.array([float(dur[:-1]) for dur in all_darks_durs])
+        best_dur_loc = np.argmin(np.abs(exp_in_s - expos_time))
+        darks_dir = os.path.join(darks_dir, all_darks_durs[best_dur_loc])
 
-    all_flats_filts = os.listdir(flats_dir)
-    for _filt in all_flats_filts:
-        if "none" in _filt.lower() and "focus" not in _filt.lower():
-            if acq_filter.lower() == "" or acq_filter.lower() == "none":
+        all_flats_filts = os.listdir(flats_dir)
+        for _filt in all_flats_filts:
+            if "none" in _filt.lower() and "focus" not in _filt.lower():
+                if acq_filter.lower() == "" or acq_filter.lower() == "none":
+                    flats_dir = os.path.join(flats_dir, _filt)
+            elif (acq_filter.lower() in _filt.lower()) and acq_filter.lower() != "":
                 flats_dir = os.path.join(flats_dir, _filt)
-        elif (acq_filter.lower() in _filt.lower()) and acq_filter.lower() != "":
-            flats_dir = os.path.join(flats_dir, _filt)
 
     return bias_dir, darks_dir, flats_dir
