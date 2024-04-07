@@ -11,7 +11,7 @@ Created on Tue Feb 20 15:28:18 2024
 
 import numpy as np
 from astropy import units as u
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import Angle, SkyCoord
 from astropy.io import ascii, fits
 from astropy.nddata import Cutout2D
 from astropy.nddata.utils import NoOverlapError
@@ -21,6 +21,8 @@ from astropy.timeseries import TimeSeries
 from astropy.wcs import WCS
 from astropy.wcs.utils import skycoord_to_pixel
 from astroquery.imcce import Skybot
+from astroquery.mast import Catalogs
+from astroquery.vizier import Vizier
 from photutils import DAOStarFinder
 from photutils.aperture import (
     CircularAnnulus,
@@ -469,6 +471,57 @@ def query_named_sso_photometry(reduced_fits_image, fwhm, cone_angle_deg=0.25, ve
         name_csv = reduced_fits_image[:-8] + f"{target}-forced_phot.csv"
         ascii.write(time_ser, name_csv, format="csv", overwrite=True)
     return time_ser
+
+
+def query_panstarrs(reduced_fits_image, cone_angle_deg=0.25, mag_limit=19, source="Vizier"):
+    """
+    Identifies the target in a Solar System Object queryin the image and performs forced photometry ;\
+        writes the results in ASCII format.
+
+    Parameters
+    ----------
+    reduced_fits_image : str or path
+        Path to the studied image in FITS format.
+    cone_angle_deg : float, optional
+        Angle of the cone within which SSO objects are searched, in degrees. The default is 0.25.
+    mag_limit : int or float
+        Highest (faintest) sources to consider in the catalog. The default is 19.
+    source : str
+        Source from which to query the PANSTARRS catalog from : whether 'Vizier' or 'MAST'. The default is 'Vizier'.
+
+    Returns
+    -------
+    catalog : Table
+        Calibrated sources from PANSTARRS in the input image.
+
+    """
+
+    # Read FITS
+    with fits.open(reduced_fits_image) as hdul:
+        hdu = hdul[0]
+        wcs = WCS(hdu.header)
+        field = SkyCoord(wcs.wcs.crval[0], wcs.wcs.crval[1], unit=u.deg)
+
+        if "mast" in source.lower():
+            # Query PanSTARRS catalog to MAST
+            catalog = Catalogs.query_criteria(
+                coordinates=field.to_string(),
+                radius=cone_angle_deg,
+                catalog="PANSTARRS",
+                table="mean",
+                data_release="dr2",
+                nStackDetections=[("gte", 1)],
+                rMeanPSFMag=[("lt", mag_limit), ("gt", 1)],
+                rMeanPSFMagErr=[("lt", 0.02), ("gt", 0.0)],
+                columns=["objName", "raMean", "decMean", "nDetections", "uMeanPSFMag", "uMeanPSFMagErr", "gMeanPSFMag", "gMeanPSFMagErr", "rMeanPSFMag", "rMeanPSFMagErr", "iMeanPSFMag", "iMeanPSFMagErr", "zMeanPSFMag", "zMeanPSFMagErr"],
+            )
+        elif "vizier" in source.lower():
+            # Query PanSTARRS catalog to Vizier
+            catalog = Vizier(row_limit=-1).query_region(field.to_string(), radius=Angle(cone_angle_deg, "deg"), catalog="II/349/ps1", column_filters={"imag": "1..21", "e_imag": "0..0.02"})
+        else:
+            raise ValueError(f"Unknown source {source} for catalog PANSTARRS. Acceptable sources are 'MAST' and 'Vizier'.\nPlease check input and re-run.")
+
+    return catalog
 
 
 # def calc_zeropoint(reduced_fits_image, sources, fwhm):
