@@ -278,7 +278,7 @@ def master_bias(bias_frames_list, overwrite=False, verbose=True):
             master_bias_as_array = np.median(bias_array, axis=0)
 
             # Write appropriate FITS files
-            fits_open_hdu.data = master_bias_as_array
+            fits_open_hdu.data = master_bias_as_array.astype(np.uint16)
             fits_open_hdu.writeto(write_path, overwrite=True)
             if verbose:
                 print(f"Master BIAS written to {write_path}.")
@@ -335,8 +335,9 @@ def master_dark(dark_frames_list, use_bias=False, master_bias="", overwrite=Fals
             mb_data = np.zeros_like(fits_open_hdu.data)
             if use_bias:
                 # Get parent directory and hdu info
-                mb_hdu = fits.open(master_bias)[0]
-                mb_data += mb_hdu.data
+                with fits.open(master_bias) as mb_hdul:
+                    mb_hdu = mb_hdul[0]
+                    mb_data += mb_hdu.data
 
             # Load frames
             darks_array = np.empty((len(dark_frames_list), *fits_open_hdu.data.shape))
@@ -359,7 +360,7 @@ def master_dark(dark_frames_list, use_bias=False, master_bias="", overwrite=Fals
 
             # Hot pixel are above a given value
             hot_pix_loc = np.where(master_dark_as_array > bkg_median + threshold * bkg_sigma)
-            hot_pixels_map = np.zeros_like(master_dark_as_array, dtype=int)
+            hot_pixels_map = np.zeros_like(master_dark_as_array, dtype=np.uint16)
             hot_pixels_map[hot_pix_loc] = 1
 
             # Some statitics
@@ -373,12 +374,12 @@ def master_dark(dark_frames_list, use_bias=False, master_bias="", overwrite=Fals
             master_dark_as_array[hot_pix_loc] = smoothed[hot_pix_loc]
 
             # Write appropriate FITS files
-            fits_open_hdu.data = master_dark_as_array
+            fits_open_hdu.data = master_dark_as_array.astype(np.uint16)
             fits_open_hdu.writeto(md_write_path, overwrite=True)
             if verbose:
                 print(f"Master DARK written to {md_write_path}.")
 
-            fits_open_hdu.data = hot_pixels_map
+            fits_open_hdu.data = hot_pixels_map.astype(np.uint16)
             fits_open_hdu.writeto(hp_write_path, overwrite=True)
             if verbose:
                 print(f"Hot pixels map written to {hp_write_path}.")
@@ -436,21 +437,22 @@ def master_flat(flat_frames_list, master_dark_path, overwrite=False, verbose=Tru
 
         if make_calib:
             # Load master dark to compute exposure ratio
-            md_hdu = fits.open(master_dark_path)[0]
+            with fits.open(master_dark_path) as md_hdul:
+                md_hdu = md_hdul[0]
 
-            # Load frames
-            flats_array = np.empty((len(flat_frames_list), *fits_open_hdu.data.shape))
-            for it, _file in enumerate(flat_frames_list):
-                with fits.open(_file) as _hdul:
-                    flat_hdu = _hdul[0]
-                    # Remove master dark, rescaled as necessary to account for exposure variations
-                    exp_ratio = flat_hdu.header.get("EXPTIME") / md_hdu.header.get("EXPTIME")
+                # Load frames
+                flats_array = np.empty((len(flat_frames_list), *fits_open_hdu.data.shape))
+                for it, _file in enumerate(flat_frames_list):
+                    with fits.open(_file) as _hdul:
+                        flat_hdu = _hdul[0]
+                        # Remove master dark, rescaled as necessary to account for exposure variations
+                        exp_ratio = flat_hdu.header.get("EXPTIME") / md_hdu.header.get("EXPTIME")
 
-                    try:
-                        scaled_flat = flat_hdu.data - exp_ratio * md_hdu.data
-                    except ValueError:
-                        scaled_flat = np.transpose(flat_hdu.data) - exp_ratio * md_hdu.data
-                    flats_array[it, :, :] = scaled_flat / np.mean(scaled_flat)
+                        try:
+                            scaled_flat = flat_hdu.data - exp_ratio * md_hdu.data
+                        except ValueError:
+                            scaled_flat = np.transpose(flat_hdu.data) - exp_ratio * md_hdu.data
+                        flats_array[it, :, :] = scaled_flat / np.mean(scaled_flat)
 
             # Master bias = median of the bias images
             master_flat_as_array = np.median(flats_array, axis=0)
@@ -464,7 +466,7 @@ def master_flat(flat_frames_list, master_dark_path, overwrite=False, verbose=Tru
 
             # Hot pixel are above a given value
             dead_pix_loc = np.where(master_flat_as_array <= max(0.0, bkg_median - threshold * bkg_sigma))
-            dead_pixels_map = np.zeros_like(master_flat_as_array, dtype=int)
+            dead_pixels_map = np.zeros_like(master_flat_as_array, dtype=np.uint16)
             dead_pixels_map[dead_pix_loc] = 1
 
             # Some statitics
@@ -483,7 +485,7 @@ def master_flat(flat_frames_list, master_dark_path, overwrite=False, verbose=Tru
             if verbose:
                 print(f"Master FLAT written to {mf_write_path}.")
 
-            fits_open_hdu.data = dead_pixels_map
+            fits_open_hdu.data = dead_pixels_map.astype(np.uint16)
             fits_open_hdu.writeto(dp_write_path, overwrite=True)
             if verbose:
                 print(f"Dead pixels map written to {dp_write_path}.")
@@ -501,7 +503,7 @@ def master_flat(flat_frames_list, master_dark_path, overwrite=False, verbose=Tru
     }
 
 
-def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_bias_dir="", use_bias=False, override_date_check=False, max_days=7, speedup=False, verbose=False, overwrite=False, write_tmp=True):
+def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_bias_dir="", use_bias=False, override_date_check=False, max_days=7, speedup=False, verbose=False, overwrite=False, write_tmp=True, overwrite_calibs=False):
     """
     Apply calibration frames to a science image to obtain a reduced science image to be used for analysis.
     If the master bias is used : $REDUCED = \frac{SCIENCE-mDARK-mBIAS}{mFLAT}$
@@ -537,6 +539,8 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
         Whether to overwrite an existing reduced image (if it exists). The default is False.
     write_tmp : bool, optional
         Whether to write the reduced image in a temporary file. Overrides the overwrite parameter. The default is True.
+    overwrite_calibs : bool, optional
+        Whether to overwrite an existing calibration frame (if it exists). The default is False.
 
     Returns
     -------
@@ -579,7 +583,7 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
             bias_list = load_bias_frames(path_to_bias_dir, sc_date, sc_cam, sc_x, sc_y, override_date_check=override_date_check, max_days=max_days, verbose=verbose)
             if speedup:
                 bias_list = np.random.choice(bias_list, max_cal_frames)
-            MASTER_BIAS = master_bias(bias_list, overwrite=False, verbose=verbose)
+            MASTER_BIAS = master_bias(bias_list, overwrite=overwrite_calibs, verbose=verbose)
 
             # Master dark
             # TBD: check if there is already one that works
@@ -587,7 +591,7 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
             darks_list = load_dark_frames(path_to_darks_dir, sc_date, sc_cam, sc_expos, sc_x, sc_y, override_date_check=override_date_check, max_days=max_days, verbose=verbose)
             if speedup:
                 darks_list = np.random.choice(darks_list, max_cal_frames)
-            MASTER_DARK, HOT_PIXELS = master_dark(darks_list, use_bias=True, master_bias=MASTER_BIAS["path"], overwrite=False, verbose=verbose)
+            MASTER_DARK, HOT_PIXELS = master_dark(darks_list, use_bias=True, master_bias=MASTER_BIAS["path"], overwrite=overwrite_calibs, verbose=verbose)
             additive_corr = MASTER_DARK["data"] - MASTER_BIAS["data"]
         else:
             # Master dark
@@ -596,7 +600,7 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
             darks_list = load_dark_frames(path_to_darks_dir, sc_date, sc_cam, sc_expos, sc_x, sc_y, override_date_check=override_date_check, max_days=max_days, verbose=verbose)
             if speedup:
                 darks_list = np.random.choice(darks_list, max_cal_frames)
-            MASTER_DARK, HOT_PIXELS = master_dark(darks_list, overwrite=False, verbose=verbose)
+            MASTER_DARK, HOT_PIXELS = master_dark(darks_list, overwrite=overwrite_calibs, verbose=verbose)
             additive_corr = MASTER_DARK["data"]
 
         # Master flat
@@ -606,7 +610,7 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
         # print(os.listdir(path_to_flats_dir), flats_list)
         if speedup:
             flats_list = np.random.choice(flats_list, max_cal_frames)
-        MASTER_FLAT, DEAD_PIXELS = master_flat(flats_list, MASTER_DARK["path"], overwrite=False, verbose=verbose)
+        MASTER_FLAT, DEAD_PIXELS = master_flat(flats_list, MASTER_DARK["path"], overwrite=overwrite_calibs, verbose=verbose)
 
         with fits.open(fits_image) as sc_hdul:
             sc_hdu = sc_hdul[0]
@@ -634,7 +638,7 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
 
             # Write appropriate FITS files
             red_hdu = sc_hdu.copy()
-            red_hdu.data = RED_SCIENCE.astype(int)
+            red_hdu.data = RED_SCIENCE.astype(np.uint16)
             red_hdu.header["PROCTYPE"] = "RED     "
             red_hdu.header["FILENAME"] = new_fn
             red_hdu.header["CREATOR"] = "JOCHEVAL"
