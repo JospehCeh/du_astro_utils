@@ -634,7 +634,7 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
 
             # Write appropriate FITS files
             red_hdu = sc_hdu.copy()
-            red_hdu.data = RED_SCIENCE
+            red_hdu.data = RED_SCIENCE.astype(int)
             red_hdu.header["PROCTYPE"] = "RED     "
             red_hdu.header["FILENAME"] = new_fn
             red_hdu.header["CREATOR"] = "JOCHEVAL"
@@ -650,7 +650,6 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
 
             dic_to_return = {
                 "path": write_path,
-                "data": RED_SCIENCE,
                 "MASTER DARK": MASTER_DARK["path"],
                 "MASTER FLAT": MASTER_FLAT["path"],
                 "HOT PIXELS": HOT_PIXELS["path"],
@@ -667,7 +666,6 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
             hdr = red_hdu.header
             dic_to_return = {
                 "path": write_path,
-                "data": red_hdu.data,
                 "MASTER DARK": hdr.get("MDARK"),
                 "MASTER FLAT": hdr.get("MFLAT"),
                 "HOT PIXELS": hdr.get("HPIXELS"),

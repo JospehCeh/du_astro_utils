@@ -12,6 +12,7 @@ Created on Tue Feb 20 15:28:18 2024
 import numpy as np
 from astropy import units as u
 from astropy.coordinates import Angle, SkyCoord
+from astropy.coordinates.name_resolve import NameResolveError
 from astropy.io import ascii, fits
 from astropy.nddata import Cutout2D
 from astropy.nddata.utils import NoOverlapError
@@ -271,6 +272,78 @@ def apert_photometry(reduced_fits_image, sources, fwhm):
     return time_ser
 
 
+def apert_photometry_target(reduced_fits_image, fwhm, verbose=True):
+    """
+    Performs aperture photometry of the target of the image ; writes the results in ASCII format.
+
+    Parameters
+    ----------
+    reduced_fits_image : str or path
+        Path to the studied image in FITS format.
+    fwhm : float
+        Full-width at half-maximum of sources described by a gaussian curve.
+    verbose : bool, optional
+        Whether to print statements. The default is True.
+
+    Returns
+    -------
+    phot_table : Table
+        Photometry of the sources in ADU counts.
+
+    """
+    with fits.open(reduced_fits_image) as hdul:
+        hdu = hdul[0]
+        wcs = WCS(hdu.header)
+        epoch = Time(hdu.header.get("DATE-OBS"), format="isot")
+
+        # Get the target position
+        target = hdu.header.get("OBJECT")
+        try:
+            target_coords = SkyCoord.from_name(target)
+        except NameResolveError:
+            target = target.split("-")[-1]  # Quick fix for the case '330-Adalberta' and similar.
+            target_coords = SkyCoord.from_name(target)
+        if verbose:
+            print(f"Target {target} found at sky-coordinates {target_coords}.")
+        target_x, target_y = skycoord_to_pixel(target_coords, wcs=wcs)
+        target_positions = np.transpose((target_x, target_y))
+
+        # Defining apertures
+        aperture_radius = 2.0 * fwhm
+        annulus_radius = [aperture_radius + 10, aperture_radius + 15]
+        apertures = CircularAperture(target_positions, r=aperture_radius)
+        phot_table = aperture_photometry(hdu.data, apertures)
+        if verbose:
+            phot_table.pprint()
+
+        # Define annuli
+        annulus_aperture = CircularAnnulus(target_positions, r_in=annulus_radius[0], r_out=annulus_radius[1])
+        annulus_masks = annulus_aperture.to_mask(method="center")
+
+        # For each source, compute the median (through sigma/clipping)
+        bkg_median_arr = []
+
+        # for mask in annulus_masks:
+        annulus_data = annulus_masks.multiply(hdu.data)
+        annulus_data_1d = annulus_data[annulus_masks.data > 0]
+        _, median_sigclip, _ = sigma_clipped_stats(annulus_data_1d)
+        bkg_median_arr = median_sigclip
+
+        # Store background stat in phot_table
+        bkg_median_arr = np.array(bkg_median_arr)
+        phot_table["annulus_median"] = bkg_median_arr
+        phot_table["aper_bkg"] = bkg_median_arr * apertures.area
+        phot_table["aper_sum_bkgsub"] = phot_table["aperture_sum"] - phot_table["aper_bkg"]
+        phot_table["noise"] = np.sqrt(phot_table["aper_sum_bkgsub"] + phot_table["aper_bkg"])  # photon noise: source + sky
+        phot_table["SNR"] = phot_table["aper_sum_bkgsub"] / phot_table["noise"]
+
+        time_ser = TimeSeries(time=np.full(phot_table["aper_sum_bkgsub"].shape, epoch), data=phot_table)
+
+        name_csv = reduced_fits_image[:-8] + "-apert_phot.csv"
+        ascii.write(time_ser, name_csv, format="csv", overwrite=True)
+    return time_ser
+
+
 def query_sso_photometry(reduced_fits_image, fwhm, cone_angle_deg=0.25, verbose=True):
     """
     Locates Solar System Objects in the image and performs forced photometry ;\
@@ -504,20 +577,13 @@ def query_panstarrs(reduced_fits_image, cone_angle_deg=0.25, mag_limit=19, sourc
 
         if "mast" in source.lower():
             # Query PanSTARRS catalog to MAST
-            catalog = Catalogs.query_criteria(
-                coordinates=field.to_string(),
-                radius=cone_angle_deg,
-                catalog="PANSTARRS",
-                table="mean",
-                data_release="dr2",
-                nStackDetections=[("gte", 1)],
-                rMeanPSFMag=[("lt", mag_limit), ("gt", 1)],
-                rMeanPSFMagErr=[("lt", 0.02), ("gt", 0.0)],
-                columns=["objName", "raMean", "decMean", "nDetections", "uMeanPSFMag", "uMeanPSFMagErr", "gMeanPSFMag", "gMeanPSFMagErr", "rMeanPSFMag", "rMeanPSFMagErr", "iMeanPSFMag", "iMeanPSFMagErr", "zMeanPSFMag", "zMeanPSFMagErr"],
-            )
+            catalog = Catalogs.query_criteria(coordinates=field.to_string(), radius=cone_angle_deg, catalog="PANSTARRS", table="mean", data_release="dr2", nStackDetections=[("gte", 1)], rMeanPSFMag=[("lt", mag_limit), ("gt", 1)], rMeanPSFMagErr=[("lt", 0.02), ("gt", 0.0)])
+            #    columns=["objName", "raMean", "decMean", "nDetections", "uMeanPSFMag", "uMeanPSFMagErr", "gMeanPSFMag", "gMeanPSFMagErr", "rMeanPSFMag", "rMeanPSFMagErr", "iMeanPSFMag", "iMeanPSFMagErr", "zMeanPSFMag", "zMeanPSFMagErr"],
+            # )
         elif "vizier" in source.lower():
             # Query PanSTARRS catalog to Vizier
-            catalog = Vizier(row_limit=-1).query_region(field.to_string(), radius=Angle(cone_angle_deg, "deg"), catalog="II/349/ps1", column_filters={"imag": "1..21", "e_imag": "0..0.02"})
+            catalog = Vizier(row_limit=-1).query_region(field.to_string(), radius=Angle(cone_angle_deg, "deg"), catalog="II/349/ps1")  # , column_filters={"imag": "1..21", "e_imag": "0..0.02"})
+            catalog = catalog[0]
         else:
             raise ValueError(f"Unknown source {source} for catalog PANSTARRS. Acceptable sources are 'MAST' and 'Vizier'.\nPlease check input and re-run.")
 

@@ -18,6 +18,11 @@ DIR_PHOTOM = "Photometry"
 DIR_SPECTRO = "Spectroscopy"
 DIR_ASTER = "Asteroids"
 DIR_CALIB = "CCD__BIAS_DARKS_FLATS"
+DIR_EXPLTS = "ExoPInts"
+DIR_CLUSTERS = "Clusters"
+DIR_VARSTARS = "VariableStars"
+DIR_GALCLUST = "Amas_Galaxies"
+
 try:
     C2PU_DATA_DIR = os.environ["ARCHIVESC2PU"]
 except KeyError:
