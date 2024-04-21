@@ -14,6 +14,7 @@ from datetime import datetime
 
 import numpy as np
 from astropy.io import fits
+from astropy.nddata import CCDData
 from astropy.stats import sigma_clipped_stats
 from scipy.ndimage import median_filter
 
@@ -278,7 +279,7 @@ def master_bias(bias_frames_list, overwrite=False, verbose=True):
             master_bias_as_array = np.median(bias_array, axis=0)
 
             # Write appropriate FITS files
-            fits_open_hdu.data = master_bias_as_array.astype(np.uint16)
+            fits_open_hdu.data = master_bias_as_array.astype(np.uint32)
             fits_open_hdu.writeto(write_path, overwrite=True)
             if verbose:
                 print(f"Master BIAS written to {write_path}.")
@@ -360,7 +361,7 @@ def master_dark(dark_frames_list, use_bias=False, master_bias="", overwrite=Fals
 
             # Hot pixel are above a given value
             hot_pix_loc = np.where(master_dark_as_array > bkg_median + threshold * bkg_sigma)
-            hot_pixels_map = np.zeros_like(master_dark_as_array, dtype=np.uint16)
+            hot_pixels_map = np.zeros_like(master_dark_as_array, dtype=np.uint32)
             hot_pixels_map[hot_pix_loc] = 1
 
             # Some statitics
@@ -374,7 +375,7 @@ def master_dark(dark_frames_list, use_bias=False, master_bias="", overwrite=Fals
             master_dark_as_array[hot_pix_loc] = smoothed[hot_pix_loc]
 
             # Write appropriate FITS files
-            fits_open_hdu.data = master_dark_as_array.astype(np.uint16)
+            fits_open_hdu.data = master_dark_as_array.astype(np.uint32)
             fits_open_hdu.writeto(md_write_path, overwrite=True)
             if verbose:
                 print(f"Master DARK written to {md_write_path}.")
@@ -466,7 +467,7 @@ def master_flat(flat_frames_list, master_dark_path, overwrite=False, verbose=Tru
 
             # Hot pixel are above a given value
             dead_pix_loc = np.where(master_flat_as_array <= max(0.0, bkg_median - threshold * bkg_sigma))
-            dead_pixels_map = np.zeros_like(master_flat_as_array, dtype=np.uint16)
+            dead_pixels_map = np.zeros_like(master_flat_as_array, dtype=np.uint32)
             dead_pixels_map[dead_pix_loc] = 1
 
             # Some statitics
@@ -638,7 +639,7 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
 
             # Write appropriate FITS files
             red_hdu = sc_hdu.copy()
-            red_hdu.data = RED_SCIENCE.astype(np.uint16)
+            red_hdu.data = CCDData(RED_SCIENCE.astype(np.uint32), mask=np.logical_or(DEAD_PIXELS["data"] == 1, HOT_PIXELS["data"] == 1), unit="adu")
             red_hdu.header["PROCTYPE"] = "RED     "
             red_hdu.header["FILENAME"] = new_fn
             red_hdu.header["CREATOR"] = "JOCHEVAL"
