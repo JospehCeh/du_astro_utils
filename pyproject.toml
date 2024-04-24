@@ -24,7 +24,8 @@ dependencies = [
     "astroquery",
     "photutils",
     "matplotlib",
-    "tqdm"
+    "tqdm",
+    "astroalign"
 ]
 
 [project.urls]
