@@ -260,7 +260,7 @@ def master_bias(bias_frames_list, overwrite=False, verbose=True):
         date = _dat.date().isoformat()
 
         # Check existing files
-        compath = os.path.commonpath(C2PU_DATA_DIR, bias_dir)
+        compath = os.path.commonpath((C2PU_DATA_DIR, bias_dir))
         rel_path = os.path.relpath(bias_dir, start=compath)
         mb_dir = os.path.abspath(os.path.join(C2PU_RES_DIR, rel_path, "MASTER_BIAS"))
         if not os.path.isdir(mb_dir):
@@ -331,7 +331,7 @@ def master_dark(dark_frames_list, use_bias=False, master_bias="", overwrite=Fals
         date = _dat.date().isoformat()
 
         # Check existing master darks
-        compath = os.path.commonpath(C2PU_DATA_DIR, darks_dir)
+        compath = os.path.commonpath((C2PU_DATA_DIR, darks_dir))
         rel_path = os.path.relpath(darks_dir, start=compath)
         md_dir = os.path.abspath(os.path.join(C2PU_RES_DIR, rel_path, "MASTER_DARKS"))
         if not os.path.isdir(md_dir):
@@ -439,7 +439,7 @@ def master_flat(flat_frames_list, master_dark_path, overwrite=False, verbose=Tru
         date = _dat.date().isoformat()
 
         # Check existing master flat
-        compath = os.path.commonpath(C2PU_DATA_DIR, flats_dir)
+        compath = os.path.commonpath((C2PU_DATA_DIR, flats_dir))
         rel_path = os.path.relpath(flats_dir, start=compath)
         mf_dir = os.path.abspath(os.path.join(C2PU_RES_DIR, rel_path, "MASTER_FLATS"))
         if not os.path.isdir(mf_dir):
@@ -572,7 +572,7 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
     sc_date, sc_scope, sc_cam, sc_filter, sc_expos, sc_x, sc_y = get_infos_from_image(fits_image, verbose=verbose)
 
     #  Check existing files
-    compath = os.path.commonpath(C2PU_DATA_DIR, sc_im_dir)
+    compath = os.path.commonpath((C2PU_DATA_DIR, sc_im_dir))
     rel_path = os.path.relpath(sc_im_dir, start=compath)
     redim_dir = os.path.abspath(os.path.join(C2PU_RES_DIR, rel_path, "REDUCED"))
     new_fn = f"{sc_im_name}_REDUCED{sc_im_ext}"
