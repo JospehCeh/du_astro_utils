@@ -208,9 +208,9 @@ def get_fwhm(reduced_fits_image, sources, src_siz=51):
                 param, _ = curve_fit(gaussian, x_arr, x_sum, p0=[np.max(src_cut.data), src_siz / 2.0, 5])
                 fwhm = np.abs(param[2]) * 2.355
             except NoOverlapError:
-                fwhm = 4.0
+                fwhm = 10.0
         else:
-            fwhm = 4.0
+            fwhm = 10.0
         # gaus_model = gaussian(x_arr, *param)
     return fwhm
 
@@ -239,8 +239,8 @@ def apert_photometry(reduced_fits_image, sources, fwhm):
         epoch = Time(hdu.header.get("DATE-OBS"), format="isot")
 
         # Defining apertures
-        aperture_radius = 1.0 * fwhm
-        annulus_radius = [aperture_radius + 2, aperture_radius + 5]
+        aperture_radius = 1.4 * fwhm
+        annulus_radius = [aperture_radius + 15, aperture_radius + 30]
         positions = np.transpose((sources["xcentroid"], sources["ycentroid"]))
         apertures = CircularAperture(positions, r=aperture_radius)
         phot_table = aperture_photometry(hdu.data, apertures)
@@ -390,7 +390,7 @@ def query_sso_photometry(reduced_fits_image, fwhm, cone_angle_deg=0.25, verbose=
         # Defining apertures
         ssos_positions = SkyCoord(ra=ssos["RA"], dec=ssos["DEC"], unit="deg")
         positions = np.transpose((catalog_x, catalog_y))
-        aperture_radius = 1.0 * fwhm
+        aperture_radius = 1.4 * fwhm
         apertures = CircularAperture(positions, r=aperture_radius)
         skyapertures_ssos = SkyCircularAperture(ssos_positions, apertures.to_sky(wcs=wcs).r)
 
@@ -400,7 +400,7 @@ def query_sso_photometry(reduced_fits_image, fwhm, cone_angle_deg=0.25, verbose=
         ssos_positions = ssos_positions[~np.isnan(phot_ssos["aperture_sum"])]
         phot_ssos = phot_ssos[~np.isnan(phot_ssos["aperture_sum"])]
 
-        annulus_radius = [aperture_radius + 2, aperture_radius + 5]
+        annulus_radius = [aperture_radius + 15, aperture_radius + 30]
         annulus_aperture = CircularAnnulus(positions, r_in=annulus_radius[0], r_out=annulus_radius[1])
         annulus_aperture_ssos = SkyCircularAnnulus(
             ssos_positions,
@@ -491,7 +491,7 @@ def query_named_sso_photometry(reduced_fits_image, fwhm, cone_angle_deg=0.25, ve
         # Defining apertures
         ssos_positions = SkyCoord(ra=targets["RA"], dec=targets["DEC"], unit="deg")
         positions = np.transpose((catalog_x, catalog_y))
-        aperture_radius = 1.0 * fwhm
+        aperture_radius = 1.4 * fwhm
         apertures = CircularAperture(positions, r=aperture_radius)
         skyapertures_ssos = SkyCircularAperture(ssos_positions, apertures.to_sky(wcs=wcs).r)
 
@@ -501,7 +501,7 @@ def query_named_sso_photometry(reduced_fits_image, fwhm, cone_angle_deg=0.25, ve
         # ssos_positions = ssos_positions[~np.isnan(phot_ssos["aperture_sum"])]
         # phot_ssos = phot_ssos[~np.isnan(phot_ssos["aperture_sum"])]
 
-        annulus_radius = [aperture_radius + 2, aperture_radius + 5]
+        annulus_radius = [aperture_radius + 15, aperture_radius + 30]
         annulus_aperture = CircularAnnulus(positions, r_in=annulus_radius[0], r_out=annulus_radius[1])
         annulus_aperture_ssos = SkyCircularAnnulus(
             ssos_positions,

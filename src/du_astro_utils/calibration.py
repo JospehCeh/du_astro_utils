@@ -250,6 +250,8 @@ def master_bias(bias_frames_list, overwrite=False, verbose=True):
         Dictionary containing the path to the written master bias and the corresponding image data.
 
     """
+    from du_astro_utils import C2PU_DATA_DIR, C2PU_RES_DIR
+
     # Get parent directory and hdu info
     with fits.open(bias_frames_list[0]) as frame0:
         fits_open_hdu = frame0[0]
@@ -258,7 +260,9 @@ def master_bias(bias_frames_list, overwrite=False, verbose=True):
         date = _dat.date().isoformat()
 
         # Check existing files
-        mb_dir = os.path.join(os.path.abspath(bias_dir), "MASTER_BIAS")
+        compath = os.path.commonpath(C2PU_DATA_DIR, bias_dir)
+        rel_path = os.path.relpath(bias_dir, start=compath)
+        mb_dir = os.path.abspath(os.path.join(C2PU_RES_DIR, rel_path, "MASTER_BIAS"))
         if not os.path.isdir(mb_dir):
             os.makedirs(mb_dir)
         write_path = os.path.join(mb_dir, f"master_bias_{date}_{camera}.fits")
@@ -317,6 +321,8 @@ def master_dark(dark_frames_list, use_bias=False, master_bias="", overwrite=Fals
         Path and map of the bad (hot) pixels.
 
     """
+    from du_astro_utils import C2PU_DATA_DIR, C2PU_RES_DIR
+
     # Get parent directory and hdu info
     with fits.open(dark_frames_list[0]) as frame0:
         fits_open_hdu = frame0[0]
@@ -325,7 +331,9 @@ def master_dark(dark_frames_list, use_bias=False, master_bias="", overwrite=Fals
         date = _dat.date().isoformat()
 
         # Check existing master darks
-        md_dir = os.path.join(os.path.abspath(darks_dir), "MASTER_DARKS")
+        compath = os.path.commonpath(C2PU_DATA_DIR, darks_dir)
+        rel_path = os.path.relpath(darks_dir, start=compath)
+        md_dir = os.path.abspath(os.path.join(C2PU_RES_DIR, rel_path, "MASTER_DARKS"))
         if not os.path.isdir(md_dir):
             os.makedirs(md_dir)
         md_write_path = os.path.join(md_dir, f"master_dark_{date}_{camera}_{exposure:.3f}.fits")
@@ -421,6 +429,8 @@ def master_flat(flat_frames_list, master_dark_path, overwrite=False, verbose=Tru
         Path and map of the bad (dead) pixels.
 
     """
+    from du_astro_utils import C2PU_DATA_DIR, C2PU_RES_DIR
+
     # Get parent directory and hdu info
     with fits.open(flat_frames_list[0]) as frame0:
         fits_open_hdu = frame0[0]
@@ -429,7 +439,9 @@ def master_flat(flat_frames_list, master_dark_path, overwrite=False, verbose=Tru
         date = _dat.date().isoformat()
 
         # Check existing master flat
-        mf_dir = os.path.join(os.path.abspath(flats_dir), "MASTER_FLATS")
+        compath = os.path.commonpath(C2PU_DATA_DIR, flats_dir)
+        rel_path = os.path.relpath(flats_dir, start=compath)
+        mf_dir = os.path.abspath(os.path.join(C2PU_RES_DIR, rel_path, "MASTER_FLATS"))
         if not os.path.isdir(mf_dir):
             os.makedirs(mf_dir)
         mf_write_path = os.path.join(mf_dir, f"master_flat_{date}_{camera}_{band}_{exposure:.3f}.fits")
@@ -550,6 +562,8 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
             and the reduced data (numpy array of pixel values).
 
     """
+    from du_astro_utils import C2PU_DATA_DIR, C2PU_RES_DIR
+
     # Get image directory, failename and extension
     sc_im_dir = os.path.abspath(os.path.dirname(fits_image))
     sc_im_name, sc_im_ext = os.path.splitext(os.path.basename(fits_image))
@@ -558,8 +572,10 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
     sc_date, sc_scope, sc_cam, sc_filter, sc_expos, sc_x, sc_y = get_infos_from_image(fits_image, verbose=verbose)
 
     #  Check existing files
+    compath = os.path.commonpath(C2PU_DATA_DIR, sc_im_dir)
+    rel_path = os.path.relpath(sc_im_dir, start=compath)
+    redim_dir = os.path.abspath(os.path.join(C2PU_RES_DIR, rel_path, "REDUCED"))
     new_fn = f"{sc_im_name}_REDUCED{sc_im_ext}"
-    redim_dir = os.path.join(os.path.abspath(sc_im_dir), "REDUCED")
     if not os.path.isdir(redim_dir):
         os.makedirs(redim_dir)
     write_path = os.path.join(redim_dir, new_fn)

@@ -27,11 +27,14 @@ DIR_GALCLUST = "Amas_Galaxies"
 
 try:
     C2PU_DATA_DIR = os.environ["ARCHIVESC2PU"]
+    C2PU_RES_DIR = os.environ["SCIMAGESC2PU"]
 except KeyError:
     try:
         C2PU_DATA_DIR = input("Please type in the location of the root archives directory, e.g. /home/user/Archives_C2PU")
+        C2PU_RES_DIR = input("Please type in the location where to write reduced images and other science files, e.g. /home/user/SCIMAGES_C2PU")
     except OSError:
         C2PU_DATA_DIR = "."
+        C2PU_RES_DIR = "SCIMAGES"
 
 
 def get_calib_dirs_photometry(fits_image_path):
