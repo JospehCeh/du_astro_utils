@@ -1,7 +1,7 @@
 from .calibration import check_obs_night, get_infos_from_image, load_bias_frames, load_dark_frames, load_flat_frames, master_bias, master_dark, master_flat, reduce_sci_image
 from .example_module import greetings, meaning
 from .photometry import apert_photometry, apert_photometry_target, detect_sources, gaussian, get_fwhm, query_named_sso_photometry, query_panstarrs, query_sso_photometry, snr
-from .utils import C2PU_DATA_DIR, C2PU_RES_DIR, DIR_ASTER, DIR_CALIB, DIR_CLUSTERS, DIR_EXPLTS, DIR_GALCLUST, DIR_PHOTOM, DIR_SPECTRO, DIR_VARSTARS, get_calib_dirs_photometry, propagate_wcs
+from .utils import C2PU_DATA_DIR, C2PU_RES_DIR, DIR_ASTER, DIR_CALIB, DIR_CLUSTERS, DIR_EXPLTS, DIR_GALCLUST, DIR_PHOTOM, DIR_SPECTRO, DIR_VARSTARS, get_calib_dirs_photometry, propagate_wcs, true_images
 
 __all__ = [
     "greetings",
@@ -36,4 +36,5 @@ __all__ = [
     "DIR_CLUSTERS",
     "DIR_VARSTARS",
     "DIR_GALCLUST",
+    "true_images",
 ]

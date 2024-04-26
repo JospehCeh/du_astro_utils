@@ -12,7 +12,9 @@ Created on Tue Feb 20 15:27:27 2024
 import os
 
 import numpy as np
+from astroalign import register
 from astropy.io import fits
+from astropy.nddata import CCDData
 from astropy.wcs import WCS
 from tqdm import tqdm
 
@@ -149,3 +151,48 @@ def propagate_wcs(aligned_files_list, ref_file=None, overwrite=False):
             _hdu.write(_npath, overwrite=True)
             new_fits.append(_npath)
     return new_fits
+
+
+def true_images(list_of_fits, ref_image_fits=None, overwrite=False):
+    """
+    Tries to true the images by :
+        1. Align them to the reference using `astroalign.register`
+        2. Plate-solve the reference using `solve-field` from astrometry.net
+        3. Propagate the plate-solved WCS to all images using the `propagate_wcs` function from this package
+
+    Parameters
+    ----------
+    list_of_fits : list of path or str
+        List of paths to the FITS files to be updated. Can contain the reference file.
+    ref_image_fits : path or str, optional
+        Path to the reference FITS file to source the WCS and to align other images to. If None (default), the first file of `list_of_fits` will be used. The default is None.
+    overwrite : bool, optional
+        Whether to overwrite the file or save to a new one. If False (default), the new file will be saved in a `aligned` subdirectory. The default is False.
+
+    Returns
+    -------
+    list of path
+        List of paths to updated FITS files.
+    """
+    img_list = [os.path.abspath(f) for f in list_of_fits]
+    ref_img = img_list[0] if ref_image_fits is None else os.path.abspath(ref_image_fits)
+
+    aligned_list = []
+    for im in img_list:
+        im_dir, im_fn = os.path.split(im)
+        aligned_img, footprint = register(im, ref_img, propagate_mask=True)
+        with fits.open(im) as hdul:
+            hdu = hdul[0].copy()
+            hdu.data = CCDData(aligned_img.astype(np.uint32), mask=footprint, unit="adu")
+            writepath = os.path.join(im_dir, im) if overwrite else os.path.join(im_dir, "aligned", f"aligned_{im}")
+            hdu.writeto(writepath, overwrite=True)
+            aligned_list.append(writepath)
+
+    im_dir, im_fn = os.path.split(ref_img)
+    out_dir = os.path.join(im_dir, "solved_astrometry")
+    solve_cmd = f"solve-field --fits-image --out tmp_solve --downsample 2 --no-plots --overwrite -D {out_dir} {ref_img}"
+    os.system(solve_cmd)
+
+    true_fits = propagate_wcs(aligned_list, ref_file=os.path.join(out_dir, "tmp_solve.fits"), overwrite=True)
+
+    return true_fits
