@@ -57,7 +57,10 @@ def get_infos_from_image(fits_image_path, verbose=True):
         # Place value of header keyword in variables
         telescope = hdu.header.get("TELESCOP").strip()
         acq_type = hdu.header.get("ACQTYPE").strip()
-        epoch = (hdu.header.get("DATE-OBS").strip()).split(".")[0] + "+00:00"
+        try:
+            epoch = (hdu.header.get("DATE-OBS").strip()).split(".")[0] + "+00:00"
+        except ValueError:
+            epoch = (hdu.header.get("DATEFILE").strip()) + "+00:00"
         expos_time = hdu.header.get("EXPTIME")
         size_x = hdu.header.get("NAXIS1")
         size_y = hdu.header.get("NAXIS2")
