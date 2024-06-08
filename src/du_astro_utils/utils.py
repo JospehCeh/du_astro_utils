@@ -141,7 +141,7 @@ def get_calib_dirs_spectroscopy(fits_image_path):
                 bias_dir = os.path.join(bias_dir, cam)
 
         for cam in os.listdir(darks_dir):
-            if cam in acq_cam:
+            if cam.lower() in acq_cam.lower():
                 darks_dir = os.path.join(darks_dir, cam)
 
         for cam in os.listdir(flats_dir):

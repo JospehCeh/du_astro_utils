@@ -59,8 +59,12 @@ def get_infos_from_image(fits_image_path, verbose=True):
         acq_type = hdu.header.get("ACQTYPE").strip()
         try:
             epoch = (hdu.header.get("DATE-OBS").strip()).split(".")[0] + "+00:00"
+            # Process useful information
+            acq_datetime = datetime.fromisoformat(epoch)
         except ValueError:
             epoch = (hdu.header.get("DATEFILE").strip()) + "+00:00"
+            # Process useful information
+            acq_datetime = datetime.fromisoformat(epoch)
         expos_time = hdu.header.get("EXPTIME")
         size_x = hdu.header.get("NAXIS1")
         size_y = hdu.header.get("NAXIS2")
@@ -75,8 +79,6 @@ def get_infos_from_image(fits_image_path, verbose=True):
         if verbose:
             print(f"{acq_type} ({size_x}x{size_y}) taken in band {acq_filter} with {acq_cam} on {telescope}@{acq_focus} on {epoch} ({expos_time}s exposure).")
 
-        # Process useful information
-        acq_datetime = datetime.fromisoformat(epoch)
     return acq_datetime, telescope, acq_cam, acq_filter, acq_focus, expos_time, size_x, size_y
 
 
@@ -600,7 +602,8 @@ def master_flat(flat_frames_list, overwrite=False, verbose=True):
             dead_pixels_map[dead_pix_loc] = 1
 
             # _sel_too_low = master_flat_as_array < bkg_sigma
-            master_flat_as_array[dead_pix_loc] = 1.0  # patch pour éviter de confondre des artefacts de bord d'image avec des sources lors de plate-solving
+            master_flat_as_array[dead_pix_loc] = bkg_median - threshold * bkg_sigma
+            # patch pour éviter de confondre des artefacts de bord d'image avec des sources lors de plate-solving
 
             # Some statitics
             if verbose:
@@ -746,6 +749,8 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
             except ValueError:
                 RED_SCIENCE = (sc_hdu.data - np.transpose(exp_ratio * MASTER_DARK["data"]) - np.transpose(MASTER_BIAS["data"])) / np.transpose(MASTER_FLAT["data"])
 
+            RED_SCIENCE = np.where(RED_SCIENCE < 0, 0, RED_SCIENCE)
+
             # Clean bad pixels
             # smoothed = median_filter(RED_SCIENCE, size=(5, 5))
 
@@ -889,6 +894,8 @@ def dedark_sci_image(fits_image, override_date_check=False, max_days=7, verbose=
                     RED_SCIENCE = sc_hdu.data - MASTER_DARK["data"]
                 except ValueError:
                     RED_SCIENCE = sc_hdu.data - np.transpose(MASTER_DARK["data"])
+
+        RED_SCIENCE = np.where(RED_SCIENCE < 0, 0, RED_SCIENCE)
 
         # Write appropriate FITS files
         red_hdu = sc_hdu
