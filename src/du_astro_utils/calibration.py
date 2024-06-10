@@ -71,10 +71,11 @@ def get_infos_from_image(fits_image_path, verbose=True):
         acq_cam = hdu.header.get("CAMMODEL").strip()
         acq_filter = hdu.header.get("INSTFILT").strip()
         try:
-            acq_focus = hdu.header.get("FOCUS").strip()
+            acq_focus = hdu.header.get("FOCPOS")
         except AttributeError:
             acq_focus = -99
-
+        if acq_focus is None:
+            acq_focus = -99
         # Print some informations regarding the frame
         if verbose:
             print(f"{acq_type} ({size_x}x{size_y}) taken in band {acq_filter} with {acq_cam} on {telescope}@{acq_focus} on {epoch} ({expos_time}s exposure).")
@@ -99,14 +100,14 @@ def check_obs_night(date, date_ref, max_days=7, verbose=True):
 
     Returns
     -------
-    bool
-        `True` if frames were taken less than `max_days` apart, otherwise `False`.
+    tuple(bool, int)
+        `True` if frames were taken less than `max_days` apart, otherwise `False`, number of days apart
 
     """
     time_delta = date - date_ref
     if verbose:
         print(time_delta)
-    return abs(time_delta.days) <= max_days
+    return abs(time_delta.days) <= max_days, time_delta.days
 
 
 def load_bias_frames(path_to_bias_dir, aq_date, aq_cam, size_x, size_y, override_date_check=False, max_days=7, verbose=True):
@@ -141,14 +142,18 @@ def load_bias_frames(path_to_bias_dir, aq_date, aq_cam, size_x, size_y, override
 
     """
     _path = os.path.abspath(path_to_bias_dir)
-    bias_frames_list = []
+    ndays_min = np.inf
     for _file in os.listdir(_path):
         bn, ext = os.path.splitext(os.path.basename(_file))
         _fpath = os.path.join(_path, _file)
         if os.path.isfile(_fpath) and "fits" in ext.lower():
             _dat, _scope, _cam, _filt, _focus, _dur, _x, _y = get_infos_from_image(_fpath, verbose=verbose)
-            if (check_obs_night(_dat, aq_date, max_days, verbose=verbose) or override_date_check) and _x == size_x and _y == size_y:
-                bias_frames_list.append(_fpath)
+            compat_date, ndays = check_obs_night(_dat, aq_date, max_days, verbose=verbose)
+            if (compat_date or override_date_check) and _x == size_x and _y == size_y:
+                if abs(ndays) < ndays_min:
+                    bias_frames_list = [_fpath]
+                elif abs(ndays) == ndays_min:
+                    bias_frames_list.append(_fpath)
     return bias_frames_list
 
 
@@ -186,14 +191,18 @@ def load_dark_frames(path_to_darks_dir, aq_date, aq_cam, expos_time, size_x, siz
 
     """
     _path = os.path.abspath(path_to_darks_dir)
-    dark_frames_list = []
+    ndays_min = np.inf
     for _file in os.listdir(_path):
         bn, ext = os.path.splitext(os.path.basename(_file))
         _fpath = os.path.join(_path, _file)
         if os.path.isfile(_fpath) and "fits" in ext.lower():
             _dat, _scope, _cam, _filt, _focus, _dur, _x, _y = get_infos_from_image(_fpath, verbose=verbose)
-            if (check_obs_night(_dat, aq_date, max_days, verbose=verbose) or override_date_check) and _x == size_x and _y == size_y and _dur == expos_time:
-                dark_frames_list.append(_fpath)
+            compat_date, ndays = check_obs_night(_dat, aq_date, max_days, verbose=verbose)
+            if (compat_date or override_date_check) and _x == size_x and _y == size_y and _dur == expos_time:
+                if abs(ndays) < ndays_min:
+                    dark_frames_list = [_fpath]
+                elif abs(ndays) == ndays_min:
+                    dark_frames_list.append(_fpath)
     return dark_frames_list
 
 
@@ -233,7 +242,7 @@ def load_flat_frames(path_to_flats_dir, aq_date, aq_cam, aq_focus, aq_filter, si
 
     """
     _path = os.path.abspath(path_to_flats_dir)
-    flat_frames_list = []
+    ndays_min = np.inf
     for _file in os.listdir(_path):
         bn, ext = os.path.splitext(os.path.basename(_file))
         _fpath = os.path.join(_path, _file)
@@ -247,9 +256,13 @@ def load_flat_frames(path_to_flats_dir, aq_date, aq_cam, aq_focus, aq_filter, si
                 aq_filter = "".join(aq_filter.split("_"))
             # print(_dat, _scope, _cam, _filt, _dur, _x, _y)
             compat_filt = (_filt == aq_filter) or (_filt.lower() in ["", "none"] and aq_filter.lower() in ["", "none"])
-            compat_foc = _focus < 0 or aq_focus < 0 or abs(_focus - aq_focus) < 2
-            if (check_obs_night(_dat, aq_date, max_days, verbose=verbose) or override_date_check) and _x == size_x and _y == size_y and compat_filt and compat_foc:
-                flat_frames_list.append(_fpath)
+            compat_foc = abs(_focus - aq_focus) < 1.5
+            compat_date, ndays = check_obs_night(_dat, aq_date, max_days, verbose=verbose)
+            if (compat_date or override_date_check) and _x == size_x and _y == size_y and compat_filt and compat_foc:
+                if abs(ndays) < ndays_min:
+                    flat_frames_list = [_fpath]
+                elif abs(ndays) == ndays_min:
+                    flat_frames_list.append(_fpath)
     return flat_frames_list
 
 
@@ -318,7 +331,7 @@ def master_bias(bias_frames_list, overwrite=False, verbose=True):
     return {"path": write_path, "data": master_bias_as_array}
 
 
-def master_dark(dark_frames_list, master_bias, overwrite=False, verbose=True):
+def master_dark(dark_frames_list, use_bias=False, master_bias="", overwrite=False, verbose=True):
     """
     Computes and returns the MASTER DARK frame.
 
@@ -326,7 +339,9 @@ def master_dark(dark_frames_list, master_bias, overwrite=False, verbose=True):
     ----------
     dark_frames_list : list
         List of paths to appropriate DARK frames.
-    master_bias : str or path
+    use_bias : bool
+        Whether to substract the master bias frame from the master dark. Necessary if the exposure of the dark differs from that of the science image. The default is False.
+    master_bias : str or path, optional
         if `use_bias` : the location of the master bias fits file. The default is "".
     overwrite : bool, optional
         Whether to overwrite an existing master dark (if it exists). The default is False.
@@ -362,9 +377,12 @@ def master_dark(dark_frames_list, master_bias, overwrite=False, verbose=True):
 
         if make_calib:
             # Get parent directory and hdu info
-            with fits.open(master_bias) as mb_hdul:
-                mb_hdu = mb_hdul[0]
-                mb_data = mb_hdu.data
+            if use_bias:
+                with fits.open(master_bias) as mb_hdul:
+                    mb_hdu = mb_hdul[0]
+                    mb_data = mb_hdu.data
+            else:
+                mb_data = np.zeros_like(fits_open_hdu.data)
 
             # Load frames
             darks_array = np.empty((len(dark_frames_list), *fits_open_hdu.data.shape))
@@ -530,14 +548,20 @@ def master_flat(flat_frames_list, overwrite=False, verbose=True):
     _dat, _scope, camera, band, focus, exposure, _x, _y = get_infos_from_image(flat_frames_list[0], verbose=verbose)
     date = _dat.date().isoformat()
 
-    bias_list = load_bias_frames(bias_dir, _dat, camera, _x, _y, override_date_check=True, verbose=verbose)
-    _MASTERBIAS = master_bias(bias_list, overwrite=False, verbose=verbose)
-
-    # Master dark
-    # TBD: check if there is already one that works
-    # path_to_darks_dir = os.path.join(sc_im_dir, '..', 'darks')
     darks_list = load_dark_frames(darks_dir, _dat, camera, exposure, _x, _y, override_date_check=True, verbose=verbose)
-    _MASTERDARK, _ = master_dark(darks_list, _MASTERBIAS["path"], overwrite=False, verbose=verbose)
+    _, _, _, _, _, dark_expos, _, _ = get_infos_from_image(darks_list[0], verbose=verbose)
+
+    # BIAS is included in DARK unless exposure time of DARK is different than that of the image
+    if abs(dark_expos - exposure) > 0.5:
+        print(dark_expos, exposure)
+        # Master bias
+        bias_list = load_bias_frames(bias_dir, _dat, camera, _x, _y, override_date_check=True, verbose=verbose)
+        _MASTERBIAS = master_bias(bias_list, overwrite=False, verbose=verbose)
+        _MASTERDARK, _ = master_dark(darks_list, use_bias=True, master_bias=_MASTERBIAS["path"], overwrite=False, verbose=verbose)
+        mb_data = _MASTERBIAS["data"]
+    else:
+        _MASTERDARK, _ = master_dark(darks_list, use_bias=False, overwrite=False, verbose=verbose)
+        mb_data = np.zeros_like(_MASTERDARK["data"])
 
     # Get parent directory and hdu info
     with fits.open(flat_frames_list[0]) as frame0:
@@ -550,7 +574,7 @@ def master_flat(flat_frames_list, overwrite=False, verbose=True):
         mf_dir = os.path.abspath(os.path.join(C2PU_RES_DIR, rel_path, "MASTER_FLATS"))
         if not os.path.isdir(mf_dir):
             os.makedirs(mf_dir)
-        mf_write_path = os.path.join(mf_dir, f"master_flat_{date}_{camera}_{band}_{exposure:.3f}.fits")
+        mf_write_path = os.path.join(mf_dir, f"master_flat_{date}_{camera}_{band}_{exposure:.3f}_foc{int(focus)}.fits")
         dp_write_path = os.path.join(mf_dir, f"bad_pixels_dead_{date}_{camera}.fits")
         make_calib = overwrite or not (os.path.isfile(mf_write_path) and os.path.isfile(dp_write_path))
 
@@ -568,9 +592,6 @@ def master_flat(flat_frames_list, overwrite=False, verbose=True):
                             md_hdu = md_hdul[0]
                             md_data = md_hdu.data
                             md_exp = md_hdu.header.get("EXPTIME")
-                        with fits.open(_MASTERBIAS["path"]) as mb_hdul:
-                            mb_hdu = mb_hdul[0]
-                            mb_data = mb_hdu.data
                         exp_ratio = flat_hdu.header.get("EXPTIME") / md_exp
                         try:
                             scaled_flat = (flat_hdu.data - mb_data) - exp_ratio * md_data
@@ -705,31 +726,28 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
         write_path = os.path.join(redim_dir, f"tmp_red{sc_im_ext}")
 
     if make_reduced:
-        # Ensure the date can be matched to an observation night D, i.e.. it is either :
-        # - D and 12:00:00 <= HH:MM:SS <= 23:59:59
-        # - D+1 and 00:00:00 <= HH:MM:SS <= 11:59:59
-        # TBD
-
         if speedup:
             max_cal_frames = 10
-
-        # BIAS is included in DARK unless exposure time of DARK is not significant
-
-        # Master bias
-        # TBD: check if there is already one that works
-        # path_to_bias_dir = os.path.join(sc_im_dir, '..', 'bias')
-        bias_list = load_bias_frames(path_to_bias_dir, sc_date, sc_cam, sc_x, sc_y, override_date_check=override_date_check, max_days=max_days, verbose=verbose)
-        if speedup:
-            bias_list = np.random.choice(bias_list, max_cal_frames)
-        MASTER_BIAS = master_bias(bias_list, overwrite=overwrite_calibs, verbose=verbose)
-
         # Master dark
-        # TBD: check if there is already one that works
         # path_to_darks_dir = os.path.join(sc_im_dir, '..', 'darks')
         darks_list = load_dark_frames(path_to_darks_dir, sc_date, sc_cam, sc_expos, sc_x, sc_y, override_date_check=override_date_check, max_days=max_days, verbose=verbose)
         if speedup:
             darks_list = np.random.choice(darks_list, max_cal_frames)
-        MASTER_DARK, HOT_PIXELS = master_dark(darks_list, MASTER_BIAS["path"], overwrite=overwrite_calibs, verbose=verbose)
+        _, _, _, _, _, dark_expos, _, _ = get_infos_from_image(darks_list[0], verbose=verbose)
+        exp_ratio = sc_expos / dark_expos
+        # BIAS is included in DARK unless exposure time of DARK is different than that of the image
+        if abs(dark_expos - sc_expos) > 0.5:
+            print(dark_expos, sc_expos)
+            # Master bias
+            bias_list = load_bias_frames(path_to_bias_dir, sc_date, sc_cam, sc_x, sc_y, override_date_check=override_date_check, max_days=max_days, verbose=verbose)
+            if speedup:
+                bias_list = np.random.choice(bias_list, max_cal_frames)
+            MASTER_BIAS = master_bias(bias_list, overwrite=overwrite_calibs, verbose=verbose)
+            MASTER_DARK, HOT_PIXELS = master_dark(darks_list, use_bias=True, master_bias=MASTER_BIAS["path"], overwrite=overwrite_calibs, verbose=verbose)
+            mb_data = MASTER_BIAS["data"]
+        else:
+            MASTER_DARK, HOT_PIXELS = master_dark(darks_list, use_bias=False, overwrite=overwrite_calibs, verbose=verbose)
+            mb_data = np.zeros_like(MASTER_DARK["data"])
 
         # Master flat
         # TBD: check if there is already one that works
@@ -745,9 +763,9 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
             with fits.open(MASTER_DARK["path"]) as md_hdul:
                 exp_ratio = sc_hdu.header.get("EXPTIME") / md_hdul[0].header.get("EXPTIME")
             try:
-                RED_SCIENCE = (sc_hdu.data - exp_ratio * MASTER_DARK["data"] - MASTER_BIAS["data"]) / MASTER_FLAT["data"]
+                RED_SCIENCE = (sc_hdu.data - exp_ratio * MASTER_DARK["data"] - mb_data) / MASTER_FLAT["data"]
             except ValueError:
-                RED_SCIENCE = (sc_hdu.data - np.transpose(exp_ratio * MASTER_DARK["data"]) - np.transpose(MASTER_BIAS["data"])) / np.transpose(MASTER_FLAT["data"])
+                RED_SCIENCE = (sc_hdu.data - np.transpose(exp_ratio * MASTER_DARK["data"]) - np.transpose(mb_data)) / np.transpose(MASTER_FLAT["data"])
 
             RED_SCIENCE = np.where(RED_SCIENCE < 0, 0, RED_SCIENCE)
 
@@ -869,7 +887,7 @@ def dedark_sci_image(fits_image, override_date_check=False, max_days=7, verbose=
         # Master dark
         # path_to_darks_dir = os.path.join(sc_im_dir, '..', 'darks')
         darks_list = load_dark_frames(path_to_darks_dir, sc_date, sc_cam, sc_expos, sc_x, sc_y, override_date_check=override_date_check, max_days=max_days, verbose=verbose)
-        _, _, _, _, dark_expos, _, _ = get_infos_from_image(darks_list[0], verbose=verbose)
+        _, _, _, _, _, dark_expos, _, _ = get_infos_from_image(darks_list[0], verbose=verbose)
         exp_ratio = sc_expos / dark_expos
         # print(exp_ratio)
 
