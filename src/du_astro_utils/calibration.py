@@ -152,6 +152,7 @@ def load_bias_frames(path_to_bias_dir, aq_date, aq_cam, size_x, size_y, override
             if (compat_date or override_date_check) and _x == size_x and _y == size_y:
                 if abs(ndays) < ndays_min:
                     bias_frames_list = [_fpath]
+                    ndays_min = abs(ndays)
                 elif abs(ndays) == ndays_min:
                     bias_frames_list.append(_fpath)
     return bias_frames_list
@@ -201,6 +202,7 @@ def load_dark_frames(path_to_darks_dir, aq_date, aq_cam, expos_time, size_x, siz
             if (compat_date or override_date_check) and _x == size_x and _y == size_y and _dur == expos_time:
                 if abs(ndays) < ndays_min:
                     dark_frames_list = [_fpath]
+                    ndays_min = abs(ndays)
                 elif abs(ndays) == ndays_min:
                     dark_frames_list.append(_fpath)
     return dark_frames_list
@@ -256,13 +258,28 @@ def load_flat_frames(path_to_flats_dir, aq_date, aq_cam, aq_focus, aq_filter, si
                 aq_filter = "".join(aq_filter.split("_"))
             # print(_dat, _scope, _cam, _filt, _dur, _x, _y)
             compat_filt = (_filt == aq_filter) or (_filt.lower() in ["", "none"] and aq_filter.lower() in ["", "none"])
-            compat_foc = abs(_focus - aq_focus) < 1.5
+            compat_foc = abs(_focus - aq_focus) < 2.0
             compat_date, ndays = check_obs_night(_dat, aq_date, max_days, verbose=verbose)
-            if (compat_date or override_date_check) and _x == size_x and _y == size_y and compat_filt and compat_foc:
+            if compat_date and _x == size_x and _y == size_y and compat_filt and compat_foc:
+                if 0 <= ndays < ndays_min:
+                    flat_frames_list = [_fpath]
+                    # print(_focus, aq_focus, _filt, aq_filter)
+                    ndays_min = ndays
+                elif ndays == ndays_min:
+                    flat_frames_list.append(_fpath)
+                # else:
+                # print(ndays, ndays_min)
+            elif override_date_check and _x == size_x and _y == size_y and compat_filt and compat_foc:
                 if abs(ndays) < ndays_min:
                     flat_frames_list = [_fpath]
-                elif abs(ndays) == ndays_min:
+                    # print(_focus, aq_focus, _filt, aq_filter)
+                    ndays_min = abs(ndays)
+                elif abs(ndays) == ndays_min:  ## attention, des flats avec des dates symétriques seront mélangés !
                     flat_frames_list.append(_fpath)
+                # else:
+                # print(ndays, ndays_min)
+            # else:
+            # print(_focus, aq_focus, _filt, aq_filter, compat_date)
     return flat_frames_list
 
 
@@ -745,9 +762,11 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
             MASTER_BIAS = master_bias(bias_list, overwrite=overwrite_calibs, verbose=verbose)
             MASTER_DARK, HOT_PIXELS = master_dark(darks_list, use_bias=True, master_bias=MASTER_BIAS["path"], overwrite=overwrite_calibs, verbose=verbose)
             mb_data = MASTER_BIAS["data"]
+            mb_path = MASTER_BIAS["path"]
         else:
             MASTER_DARK, HOT_PIXELS = master_dark(darks_list, use_bias=False, overwrite=overwrite_calibs, verbose=verbose)
             mb_data = np.zeros_like(MASTER_DARK["data"])
+            mb_path = ""
 
         # Master flat
         # TBD: check if there is already one that works
@@ -792,7 +811,7 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
             red_hdu.header["PROCTYPE"] = "RED     "
             red_hdu.header["FILENAME"] = new_fn
             red_hdu.header["CREATOR"] = "JOCHEVAL"
-            red_hdu.header["MBIAS"] = MASTER_BIAS["path"]
+            red_hdu.header["MBIAS"] = mb_path
             red_hdu.header["MDARK"] = MASTER_DARK["path"]
             red_hdu.header["MFLAT"] = MASTER_FLAT["path"]
             red_hdu.header["HPIXELS"] = HOT_PIXELS["path"]
@@ -803,7 +822,7 @@ def reduce_sci_image(fits_image, path_to_darks_dir, path_to_flats_dir, path_to_b
 
             dic_to_return = {
                 "path": write_path,
-                "MASTER BIAS": MASTER_BIAS["path"],
+                "MASTER BIAS": mb_path,
                 "MASTER DARK": MASTER_DARK["path"],
                 "MASTER FLAT": MASTER_FLAT["path"],
                 "HOT PIXELS": HOT_PIXELS["path"],
