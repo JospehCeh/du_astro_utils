@@ -16,8 +16,8 @@ import numpy as np
 from astropy.io import fits
 from astropy.nddata import CCDData
 from astropy.stats import sigma_clipped_stats
+from scipy.ndimage import median_filter
 
-# from scipy.ndimage import median_filter
 from .utils import get_calib_dirs_photometry
 
 
@@ -627,21 +627,18 @@ def master_flat(flat_frames_list, overwrite=False, verbose=True):
             _, norm, _ = sigma_clipped_stats(master_flat_as_array, sigma=5.0)
             master_flat_as_array /= norm
 
-            # Sigma-clipped statistics to detect hot pixels
+            # Sigma-clipped statistics to detect dead pixels
             bkg_mean, bkg_median, bkg_sigma = sigma_clipped_stats(master_flat_as_array, sigma=3.0)
             # print(bkg_mean, bkg_median, bkg_sigma)
 
             # Threshold for hot pixel detection
-            threshold = 5
+            threshold = 7
 
             # Hot pixel are above a given value
-            dead_pix_loc = np.where(master_flat_as_array <= max(0.0, bkg_median - threshold * bkg_sigma))
+            dead_pix_loc = np.nonzero(bkg_sigma <= master_flat_as_array <= bkg_median - threshold * bkg_sigma)
+            neg_pix_loc = np.nonzero(master_flat_as_array < bkg_sigma)
             dead_pixels_map = np.zeros_like(master_flat_as_array)
             dead_pixels_map[dead_pix_loc] = 1
-
-            # _sel_too_low = master_flat_as_array < bkg_sigma
-            master_flat_as_array[dead_pix_loc] = bkg_median - threshold * bkg_sigma
-            # patch pour éviter de confondre des artefacts de bord d'image avec des sources lors de plate-solving
 
             # Some statitics
             if verbose:
@@ -650,8 +647,12 @@ def master_flat(flat_frames_list, overwrite=False, verbose=True):
                 print(f"Fraction of dead pixels (%) : {100*len(master_flat_as_array[dead_pix_loc])/len(master_flat_as_array.flatten()):.2f}")
 
             # Cosmetic smoothing
-            # smoothed = median_filter(master_flat_as_array, size=(5, 5))
-            # master_flat_as_array[dead_pix_loc] = smoothed[dead_pix_loc]
+            smoothed = median_filter(master_flat_as_array, size=(5, 5))
+            master_flat_as_array[dead_pix_loc] = smoothed[dead_pix_loc]
+
+            # _sel_too_low = master_flat_as_array < bkg_sigma
+            master_flat_as_array[neg_pix_loc] = 1  # bkg_median - threshold * bkg_sigma
+            # patch pour éviter de confondre des artefacts de bord d'image avec des sources lors de plate-solving
 
             # Write appropriate FITS files
             fits_open_hdu.data = master_flat_as_array.astype(np.float32)
