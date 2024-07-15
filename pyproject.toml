@@ -25,7 +25,10 @@ dependencies = [
     "photutils",
     "matplotlib",
     "tqdm",
-    "astroalign"
+    "astroalign",
+    "pandas",
+    "regions",
+    "seaborn"
 ]
 
 [project.urls]
