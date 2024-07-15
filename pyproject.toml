@@ -27,7 +27,8 @@ dependencies = [
     "tqdm",
     "astroalign",
     "pandas",
-    "regions"
+    "regions",
+    "seaborn"
 ]
 
 [project.urls]
